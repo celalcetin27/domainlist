@@ -23,9 +23,6 @@ app.get("/" , (req,res) => {
     res.json("this backend")
 })
 
-
-
-
 app.get("/domains" , (req,res)=>{
     const query = "SELECT * FROM domains"
     db.query(query,(err,data) =>{
@@ -106,8 +103,6 @@ app.post('/register' , (req,res) => {
     } catch (error) {
         console.log(error);
     }
-   
-    
 })
 
 app.post("/login" , (req,res)=> {
@@ -150,7 +145,6 @@ app.post("/logout", (req, res) => {
     }
     
     const token = authorizationHeader.split(" ")[1];
-    console.log(token)
     try {
       jwt.verify(token, "secret key", (err, decoded) => {
         if (err) {
