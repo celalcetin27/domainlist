@@ -12,10 +12,11 @@ const app = express()
 
 const db = mysql.createConnection({
     host: "localhost",
-    user: "root",
-    password: "root123",
+    user: process.env.USER,
+    password: process.env.PASSWORD,
     database: "domainapp"
 })
+
 
 app.use(express.json())
 app.use(cors())
@@ -46,7 +47,7 @@ app.post("/domains", async (req, res) => {
 
     const value = req.body.domains;
     try {
-        const response = await axios.get(`https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey=at_Gx0YnVL7gNw5eAme2BFScYBdmNAka&domainName=${value}&outputFormat=json`)
+        const response = await axios.get(`https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey=${process.env.API_KEY}&domainName=${value}&outputFormat=json`)
         const domainJson = response.data
         const q = "INSERT INTO domains (domains, data) VALUES (?,?)"
         db.query(q, [value, JSON.stringify(domainJson)], (err, data) => {
@@ -59,15 +60,6 @@ app.post("/domains", async (req, res) => {
     }
 });
 
-//   app.post("/domains", async (req, res) => {
-//     const response = await axios.get(`https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey=${process.env.API_KEY}&domainName=${data.domains}&outputFormat=json`)
-//     const q = "INSERT INTO domains (`domains`) VALUES (?)";
-//     const value = req.body.domains;
-//     db.query(q, [value], (err, data) => {
-//       if (err) return res.json(err);
-//       return res.json("Adding domain");
-//     });
-//   });
 
 app.delete("/domains/:id", (req, res) => {
     const domainId = req.params.id
