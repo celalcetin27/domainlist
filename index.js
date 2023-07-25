@@ -3,10 +3,10 @@ import mysql from "mysql"
 import cors from "cors"
 import bcrypt, { hash } from "bcrypt"
 import jwt from "jsonwebtoken"
-import sessionstroge from "sessionstorage"
 import axios from "axios"
+import nodemailer from "nodemailer";
+import cron from "node-cron";
 
-const tokenBlackList = new Set()
 
 const app = express()
 
@@ -47,7 +47,7 @@ app.post("/domains", async (req, res) => {
 
     const value = req.body.domains;
     try {
-        const response = await axios.get(`https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey=${process.env.API_KEY}&domainName=${value}&outputFormat=json`)
+        const response = await axios.get(`https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey=${process.env.API_KEY}=${value}&outputFormat=json`)
         const domainJson = response.data
         const q = "INSERT INTO domains (domains, data) VALUES (?,?)"
         db.query(q, [value, JSON.stringify(domainJson)], (err, data) => {
@@ -59,7 +59,6 @@ app.post("/domains", async (req, res) => {
         return res.json(error)
     }
 });
-
 
 app.delete("/domains/:id", (req, res) => {
     const domainId = req.params.id
@@ -177,6 +176,67 @@ app.post("/logout", (req, res) => {
         res.status(500).json({ error: "An error occurred" });
     }
 });
+
+async function sendEmail(receiverEmail, subject, content) {
+    try {
+      let transporter = nodemailer.createTransport({
+        service: "Gmail",
+        auth: {
+          user: "ccmby2747@gmail.com", 
+          pass: process.env.MAIL_PASSWORD, 
+        },
+      });
+  
+      let mailOptions = {
+        from: "ccmby2747@gmail.com",
+        to: receiverEmail,
+        subject: subject,
+        text: content,
+      };
+  
+      await transporter.sendMail(mailOptions);
+      console.log("E-posta gönderildi:", mailOptions);
+    } catch (error) {
+      console.error("E-posta gönderirken hata oluştu:", error);
+    }
+  }
+
+const checkDomainsAndSendEmails = async () => {
+    const thirtyDaysInMilliseconds = 30 * 24 * 60 * 60 * 1000; 
+  
+    const query = "SELECT * FROM domains";
+    db.query(query, async (err, data) => {
+      if (err) {
+        console.error("Domainleri sorgularken hata oluştu:", err);
+        return;
+      }
+      for (const domain of data) {
+       
+        const domainInfo = JSON.parse(domain.data);
+        const expirationDate = new Date(domainInfo.WhoisRecord.registryData.expiresDate);
+  
+       
+        const thirtyDaysBeforeExpiration = new Date(Date.now() + thirtyDaysInMilliseconds);
+  
+       
+        if (expirationDate < thirtyDaysBeforeExpiration) {
+          const domainOwnerEmail = "emre.yuz@haus.com.tr"; 
+          const subject = "Domaininizin Süresi Dolmak Üzere";
+          const content = `Merhaba, domaininiz ${domain.domains} ${domainInfo.WhoisRecord.registryData.expiresDate} tarihinde sona eriyor.`;
+  
+          await sendEmail(domainOwnerEmail, subject, content);
+          console.log(`E-posta gönderildi: ${domain.domains}`);
+        }
+      }
+    });
+  };
+  
+  
+  cron.schedule("51 0 * * *", async () => {
+    console.log("Cron job çalıştırılıyor...");
+    await checkDomainsAndSendEmails();
+  });
+
 
 
 app.listen(8080, () => {
