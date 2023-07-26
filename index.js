@@ -271,7 +271,7 @@ const checkDomain = async () => {
 
 
 
-cron.schedule("40 13 * * *", async () => {
+cron.schedule("0 0 * * *", async () => {
     console.log("Cron working...")
         await checkDomain()
 });
