@@ -8,6 +8,7 @@ import nodemailer from "nodemailer";
 import cron from "node-cron";
 
 
+
 const app = express()
 
 const db = mysql.createConnection({
@@ -54,7 +55,7 @@ app.post("/domains", async (req, res) => {
             if (err) return res.json(err);
             return res.json("Adding domain");
         });
-        
+
     } catch (error) {
         return res.json(error)
     }
@@ -179,63 +180,101 @@ app.post("/logout", (req, res) => {
 
 async function sendEmail(receiverEmail, subject, content) {
     try {
-      let transporter = nodemailer.createTransport({
-        service: "Gmail",
-        auth: {
-          user: "ccmby2747@gmail.com", 
-          pass: process.env.MAIL_PASSWORD, 
-        },
-      });
-  
-      let mailOptions = {
-        from: "ccmby2747@gmail.com",
-        to: receiverEmail,
-        subject: subject,
-        text: content,
-      };
-  
-      await transporter.sendMail(mailOptions);
-      console.log("E-posta gönderildi:", mailOptions);
-    } catch (error) {
-      console.error("E-posta gönderirken hata oluştu:", error);
-    }
-  }
+        let transporter = nodemailer.createTransport({
+            service: "Gmail",
+            auth: {
+                user:   process.env.MAIL,
+                pass: process.env.MAIL_PASSWORD,
+            },
+        });
 
-const checkDomainsAndSendEmails = async () => {
-    const thirtyDaysInMilliseconds = 30 * 24 * 60 * 60 * 1000; 
-  
+        let mailOptions = {
+            from: process.env.MAIL_PASSWORD,
+            to: receiverEmail,
+            subject: subject,
+            html: content,
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log("E-posta gönderildi:", mailOptions);
+    } catch (error) {
+        console.error("E-posta gönderirken hata oluştu:", error);
+    }
+}
+
+
+
+const checkDomain = async () => {
+
+    const checkingRemainingDay = 350;
+    const InMilliseconds = checkingRemainingDay * 24 * 60 * 60 * 1000;
+
+    const domainRows = [];
+
     const query = "SELECT * FROM domains";
     db.query(query, async (err, data) => {
-      if (err) {
-        console.error("Domainleri sorgularken hata oluştu:", err);
-        return;
-      }
-      for (const domain of data) {
-       
-        const domainInfo = JSON.parse(domain.data);
-        const expirationDate = new Date(domainInfo.WhoisRecord.registryData.expiresDate);
-  
-       
-        const thirtyDaysBeforeExpiration = new Date(Date.now() + thirtyDaysInMilliseconds);
-  
-       
-        if (expirationDate < thirtyDaysBeforeExpiration) {
-          const domainOwnerEmail = "emre.yuz@haus.com.tr"; 
-          const subject = "Domaininizin Süresi Dolmak Üzere";
-          const content = `Merhaba, domaininiz ${domain.domains} ${domainInfo.WhoisRecord.registryData.expiresDate} tarihinde sona eriyor.`;
-  
-          await sendEmail(domainOwnerEmail, subject, content);
-          console.log(`E-posta gönderildi: ${domain.domains}`);
+        if (err) {
+            console.error("Domainleri sorgularken hata oluştu:", err);
+            return;
         }
-      }
+        for (const domain of data) {
+            const domainInfo = JSON.parse(domain.data);
+            const expirationDate = new Date(domainInfo.WhoisRecord.registryData.expiresDate);
+            const remainingDays = Math.floor((expirationDate - Date.now()) / (24 * 60 * 60 * 1000));
+            const localExpirationDate = expirationDate.toLocaleDateString();
+            const thirtyDaysBeforeExpiration = new Date(Date.now() + InMilliseconds);
+
+            if (expirationDate < thirtyDaysBeforeExpiration) {
+                const row = `
+                    <tr>
+                        <td>${domain.domains}</td>
+                        <td>${localExpirationDate}</td>
+                        <td>${remainingDays} gün</td>
+                    </tr>
+                `;
+                domainRows.push(row);
+            }
+        }
+
+        if (domainRows.length > 0) {
+            const domainTable = `
+                <table style="font-family: Arial, sans-serif; border-collapse: collapse; width: 100%;">
+                    <tr>
+                        <th style="background-color: #f2f2f2; padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Domain</th>
+                        <th style="background-color: #f2f2f2; padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Son Kullanma Tarihi</th>
+                        <th style="background-color: #f2f2f2; padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Kalan Gün</th>
+                    </tr>
+                    ${domainRows.join("")}
+                </table>
+            `;
+
+            const domainOwnerEmail = process.env.CUSTOMER_MAIL;
+            const subject = "Domainlerinizin Süresi Dolmak Üzere";
+            const content = `
+                <div style="font-family: Arial, sans-serif; background-color: #f0f0f0; padding: 20px;">
+                    <h1 style="color: #007bff;">Emre Bey  Merhaba!</h1>
+                    <p style="color: #333;"> Süresi dolmak üzere olan domainleriniz bulunmaktadır:</p>
+                    ${domainTable}
+                </div>
+            `;
+
+            await sendEmail(domainOwnerEmail, subject, content);
+            console.log("E-posta gönderildi: Tüm domainler");
+        } else {
+            console.log("Süresi dolmak üzere olan domain bulunmamaktadır.");
+        }
     });
-  };
-  
-  
-  cron.schedule("51 0 * * *", async () => {
-    console.log("Cron job çalıştırılıyor...");
-    await checkDomainsAndSendEmails();
-  });
+};
+
+
+
+
+
+
+cron.schedule("40 13 * * *", async () => {
+    console.log("Cron working...")
+        await checkDomain()
+});
 
 
 
